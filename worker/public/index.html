@@ -247,9 +247,74 @@ const view = (() => {
 })();
 function saveView() { try { localStorage.setItem("view", JSON.stringify(view)); } catch {} }
 
+// 地形はネタバレ防止のため、地上の登録座標のまわりだけ見せる（行ったことのある場所だけ地図が埋まる）
+const REVEAL = 192; // 見せる半径（ブロック）。描画距離 12 チャンクくらい
+let revealed = []; // [x, z] の一覧
+
+// タイル 1 枚の範囲（ブロック）。ズーム z のタイルは 4096 / 2**z ブロック四方
+function tileRange(c) {
+  const size = 4096 / 2 ** c.z;
+  return { x0: c.x * size, z0: c.y * size, size };
+}
+function nearby(c) {
+  const { x0, z0, size } = tileRange(c);
+  return revealed.filter(([x, z]) =>
+    x > x0 - REVEAL && x < x0 + size + REVEAL && z > z0 - REVEAL && z < z0 + size + REVEAL);
+}
+
+// 地形タイルを、見せる範囲だけ切り抜いて描く。範囲にかからないタイルは読み込みもしない
+const Terrain = L.GridLayer.extend({
+  createTile(c, done) {
+    const tile = document.createElement("canvas");
+    tile.width = tile.height = 256;
+    tile.coords = c;
+    this.paint(tile);
+    setTimeout(() => done(null, tile), 0);
+    return tile;
+  },
+  paint(tile) {
+    const pts = nearby(tile.coords);
+    const ctx = tile.getContext("2d");
+    ctx.clearRect(0, 0, 256, 256);
+    if (!pts.length) return;
+    if (!tile.img) {
+      const c = tile.coords;
+      tile.img = new Image();
+      tile.img.onload = () => this.paint(tile);
+      tile.img.src = `tiles/${c.z}/${c.y}/${c.x}.webp`;
+    }
+    if (!tile.img.complete || !tile.img.naturalWidth) return;
+    // 見せる範囲を縁がぼやけた円で塗り、その形で地形を切り抜く
+    const { x0, z0, size } = tileRange(tile.coords);
+    const k = 256 / size, r = REVEAL * k;
+    for (const [x, z] of pts) {
+      const cx = (x - x0) * k, cy = (z - z0) * k;
+      const g = ctx.createRadialGradient(cx, cy, r * 0.6, cx, cy, r);
+      g.addColorStop(0, "#000");
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    }
+    ctx.globalCompositeOperation = "source-in";
+    ctx.drawImage(tile.img, 0, 0);
+    ctx.globalCompositeOperation = "source-over";
+  },
+  repaint() {
+    for (const t of Object.values(this._tiles)) this.paint(t.el);
+  },
+});
+let terrain = null;
+
+function updateReveal() {
+  const next = points.filter((p) => p.dimension === "overworld").map((p) => [p.x, p.z]);
+  if (JSON.stringify(next) === JSON.stringify(revealed)) return;
+  revealed = next;
+  terrain?.repaint();
+}
+
 fetch("tiles/meta.json").then((r) => r.json()).then((meta) => {
   const R = meta.radius;
-  L.tileLayer("tiles/{z}/{y}/{x}.webp", {
+  terrain = new Terrain({
     tileSize: 256, minZoom: 0, maxZoom: 6, maxNativeZoom: meta.maxNativeZoom,
     bounds: [[-R, -R], [R, R]], noWrap: true,
   }).addTo(map).bringToBack();
@@ -299,6 +364,7 @@ function visible(p) {
 }
 
 function render() {
+  updateReveal();
   markers.clearLayers();
   byId.clear();
   for (const p of points) {
