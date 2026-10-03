@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS points (
     z          INTEGER NOT NULL,
     dimension  TEXT    NOT NULL DEFAULT 'overworld',
     note       TEXT,
+    category   TEXT    NOT NULL DEFAULT 'other',
     author     TEXT    NOT NULL,
     created_at TEXT    NOT NULL DEFAULT (datetime('now', '+9 hours'))
 );

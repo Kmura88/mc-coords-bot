@@ -5,96 +5,157 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>座標マップ</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=M+PLUS+1p:wght@400;700&display=swap">
 <style>
+  /* 石材のグレーを地に、ゲーム内の「座標を表示」と同じドット文字を座標の表示に使う */
   :root {
-    --bg: #f6f6f4; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
-    --border: #e2e1dc; --hover: #f0efea; --accent: #2f7d4f; --map-bg: #1b2a3a;
+    --ground: #dcddd9; --panel: #f3f3f0; --field: #ffffff; --text: #1f2124; --muted: #61656b;
+    --line: #b9bbb6; --hover: #e7e8e4; --edge: #8e918b;
+    --go: #3c8527; --go-edge: #1d4d13; --stop: #b3261e; --map-bg: #1b2a3a;
+    --hud-bg: rgba(0, 0, 0, .55);
+    --pixel: "DotGothic16", "MS Gothic", "Osaka-Mono", monospace;
+    --body: "M PLUS 1p", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #161716; --panel: #1f201f; --text: #ecece8; --muted: #9a9a94;
-      --border: #333430; --hover: #2a2b29; --accent: #5fbf85; --map-bg: #0f1822;
+      color-scheme: dark;
+      --ground: #232427; --panel: #2d2e33; --field: #1f2023; --text: #e6e6e3; --muted: #9c9ea3;
+      --line: #45474d; --hover: #36383d; --edge: #17181a;
+      --go: #4a9a32; --go-edge: #22561a; --stop: #f2867e; --map-bg: #0f1822;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #161716; --panel: #1f201f; --text: #ecece8; --muted: #9a9a94;
-    --border: #333430; --hover: #2a2b29; --accent: #5fbf85; --map-bg: #0f1822;
+    color-scheme: dark;
+    --ground: #232427; --panel: #2d2e33; --field: #1f2023; --text: #e6e6e3; --muted: #9c9ea3;
+    --line: #45474d; --hover: #36383d; --edge: #17181a;
+    --go: #4a9a32; --go-edge: #22561a; --stop: #f2867e; --map-bg: #0f1822;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
   body {
-    background: var(--bg); color: var(--text);
-    font: 14px/1.5 system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    background: var(--ground); color: var(--text);
+    font: 14px/1.6 var(--body);
     display: flex; height: 100dvh; overflow: hidden;
   }
+  :focus-visible { outline: 2px solid var(--go); outline-offset: 2px; }
+
+  /* ---- サイドバー */
   #side {
     width: 300px; flex: none; display: flex; flex-direction: column;
-    background: var(--panel); border-right: 1px solid var(--border);
+    background: var(--panel); border-right: 2px solid var(--edge);
   }
-  #side header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
-  #side h1 { font-size: 16px; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+  #side header { padding: 14px 16px 12px; border-bottom: 1px solid var(--line); }
+  #side h1 {
+    font: 22px/1.2 var(--pixel); margin: 0 0 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
   #side h1 span { flex: 1; }
+
+  /* 統合版のボタンのように、下端を濃くして押せる面に見せる */
   .btn {
-    font: inherit; font-size: 13px; padding: 3px 12px; cursor: pointer; border-radius: 6px;
-    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    font: 13px/1.4 var(--body); padding: 5px 12px 7px; cursor: pointer; border-radius: 2px;
+    background: var(--field); color: var(--text); border: 1px solid var(--line);
+    box-shadow: inset 0 -3px 0 var(--line);
   }
   .btn:hover { background: var(--hover); }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn.danger { color: #c0392b; }
-  #add[hidden] { display: none; }
+  .btn:active { box-shadow: none; padding: 6px 12px; transform: translateY(1px); }
+  .btn.primary { background: var(--go); border-color: var(--go-edge); color: #fff; box-shadow: inset 0 -3px 0 var(--go-edge); }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.danger { color: var(--stop); }
+  .btn:disabled { opacity: .6; cursor: default; }
+
   #search {
     width: 100%; padding: 7px 10px; font: inherit; color: var(--text);
-    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    background: var(--field); border: 1px solid var(--line); border-radius: 2px;
   }
+  #filters { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+  .chip {
+    font: 12px/1.4 var(--body); padding: 2px 8px 2px 6px; cursor: pointer; border-radius: 2px;
+    background: transparent; color: var(--text); border: 1px solid var(--line);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .chip:hover { background: var(--hover); }
+  .swatch { display: inline-block; width: 10px; height: 10px; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); }
+  .chip.hidden { color: var(--muted); text-decoration: line-through; border-style: dashed; }
+  .chip.hidden .swatch { opacity: .25; }
+  #nether-toggle { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; color: var(--muted); cursor: pointer; }
+  #nether-toggle input { accent-color: var(--go); margin: 0; }
+
   #list { list-style: none; margin: 0; padding: 4px 0; overflow-y: auto; flex: 1; }
-  #list li { padding: 8px 16px; cursor: pointer; border-left: 3px solid transparent; }
+  #list li { padding: 9px 16px; cursor: pointer; }
   #list li:hover { background: var(--hover); }
   #list li.off { cursor: default; }
-  #list .name { font-weight: 600; }
-  #list .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
-  #list .sub { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-  #list .edit { float: right; font-size: 12px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 0; }
+  #list li.off .name { color: var(--muted); }
+  #list .name { font-weight: 700; display: flex; align-items: center; gap: 7px; }
+  #list .n { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  #list .pos { font: 13px/1.5 var(--pixel); color: var(--muted); margin-left: 17px; }
+  #list .note { color: var(--muted); font-size: 12px; margin-left: 17px; }
+  #list .edit { font: 12px var(--body); color: var(--muted); background: none; border: none; cursor: pointer; padding: 0; }
   #list .edit:hover { color: var(--text); text-decoration: underline; }
-  #list .tag { font-size: 11px; padding: 0 5px; border-radius: 4px; border: 1px solid var(--border); margin-left: 4px; color: var(--muted); }
-  #status { padding: 8px 16px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--border); }
-  #map { flex: 1; background: var(--map-bg); }
+  #list .tag { font-size: 11px; font-weight: 400; padding: 0 5px; border: 1px solid var(--line); color: var(--muted); }
+  #list .empty { cursor: default; color: var(--muted); padding: 16px; }
+  #list .empty:hover { background: none; }
+  #status { padding: 8px 16px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); }
+
+  /* ---- 地図 */
+  #map { flex: 1; background: var(--map-bg); font: 14px/1.5 var(--body); }
+  /* ゲーム内の座標表示と同じ位置・見た目 */
   #coords {
-    position: absolute; left: 10px; bottom: 10px; z-index: 1000; pointer-events: none;
-    background: rgba(0,0,0,.6); color: #fff; padding: 3px 8px; border-radius: 4px;
-    font-size: 12px; font-variant-numeric: tabular-nums;
+    position: absolute; left: 10px; top: 10px; z-index: 1000; pointer-events: none;
+    background: var(--hud-bg); color: #fff; padding: 2px 8px 3px;
+    font: 16px/1.4 var(--pixel); text-shadow: 2px 2px 0 #3f3f3f;
   }
   #coords:empty { display: none; }
   .pin-label {
-    background: rgba(0,0,0,.65); color: #fff; border: none; box-shadow: none;
-    font-weight: 600; padding: 1px 6px;
+    background: var(--hud-bg); color: #fff; border: none; border-radius: 0; box-shadow: none;
+    font: 13px/1.4 var(--pixel); text-shadow: 1px 1px 0 #3f3f3f; padding: 1px 6px;
   }
   .pin-label::before { display: none; }
-  .leaflet-popup-content { font: 13px/1.5 system-ui, sans-serif; }
-  .leaflet-popup-content code { display: block; margin-top: 4px; padding: 4px 6px; background: #f0f0ec; border-radius: 4px; user-select: all; }
-  .leaflet-popup-content .actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
-  dialog {
-    border: 1px solid var(--border); border-radius: 10px; padding: 0; width: min(380px, calc(100vw - 32px));
-    background: var(--panel); color: var(--text);
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+    background: var(--panel); color: var(--text); border-radius: 2px;
+    box-shadow: 0 2px 0 var(--edge), 0 6px 18px rgba(0,0,0,.3);
   }
-  dialog::backdrop { background: rgba(0,0,0,.4); }
+  .leaflet-popup-content { font: 13px/1.6 var(--body); margin: 12px 14px; }
+  .leaflet-popup-content b { font-size: 14px; }
+  .leaflet-popup-content .pos { font: 15px/1.5 var(--pixel); display: block; margin-top: 2px; }
+  .leaflet-popup-content .muted { color: var(--muted); }
+  .leaflet-popup-content .actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .leaflet-container a.leaflet-popup-close-button { color: var(--muted); }
+  .leaflet-bar a { background: var(--panel); color: var(--text); border-color: var(--line); border-radius: 0 !important; }
+  .leaflet-bar a:hover { background: var(--hover); }
+
+  /* ---- 追加・編集フォーム */
+  dialog {
+    border: 1px solid var(--line); border-radius: 2px; padding: 0; width: min(380px, calc(100vw - 32px));
+    background: var(--panel); color: var(--text); box-shadow: 0 3px 0 var(--edge);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
   dialog form { padding: 18px 20px; display: grid; gap: 10px; }
-  dialog h2 { font-size: 16px; margin: 0 0 4px; }
+  dialog h2 { font: 20px/1.3 var(--pixel); margin: 0 0 4px; }
   dialog label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
   dialog input, dialog select, dialog textarea {
-    font: inherit; font-size: 14px; color: var(--text); background: var(--bg);
-    border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; width: 100%;
+    font: inherit; font-size: 14px; color: var(--text); background: var(--field);
+    border: 1px solid var(--line); border-radius: 2px; padding: 6px 8px; width: 100%;
   }
+  dialog input[type="number"] { font: 16px/1.3 var(--pixel); }
   dialog label[hidden] { display: none; }
   dialog textarea { resize: vertical; min-height: 54px; }
   dialog .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
   dialog .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
-  #form-error { color: #c0392b; font-size: 13px; min-height: 1em; margin: 0; }
+  #form-error { color: var(--stop); font-size: 13px; min-height: 1em; margin: 0; }
+
   #toggle { display: none; }
   @media (max-width: 700px) {
     body { flex-direction: column-reverse; }
-    #side { width: 100%; height: 38dvh; border-right: none; border-top: 1px solid var(--border); }
+    #side { width: 100%; height: 42dvh; border-right: none; border-top: 2px solid var(--edge); }
+    #side h1 { font-size: 18px; margin-bottom: 10px; }
     #side.collapsed { height: auto; }
-    #side.collapsed #list, #side.collapsed #status, #side.collapsed #search { display: none; }
+    #side.collapsed header { border-bottom: none; }
+    #side.collapsed h1 { margin-bottom: 0; }
+    #side.collapsed #list, #side.collapsed #status, #side.collapsed #search,
+    #side.collapsed #filters, #side.collapsed #nether-toggle { display: none; }
     #toggle { display: inline-block; }
   }
 </style>
@@ -102,8 +163,10 @@
 <body>
 <aside id="side">
   <header>
-    <h1><span>座標マップ</span><button id="add" class="btn primary" type="button" hidden>追加</button><button id="toggle" class="btn" type="button">一覧</button></h1>
-    <input id="search" type="search" placeholder="名前・メモで検索">
+    <h1><span>座標マップ</span><button id="add" class="btn primary" type="button" hidden>座標を追加</button><button id="toggle" class="btn" type="button">一覧</button></h1>
+    <input id="search" type="search" placeholder="名前・メモで検索" aria-label="名前・メモで検索">
+    <div id="filters" role="group" aria-label="カテゴリで絞り込み"></div>
+    <label id="nether-toggle"><input id="show-nether" type="checkbox">ネザーの座標も地図に出す（8倍の位置）</label>
   </header>
   <ul id="list"></ul>
   <div id="status">読み込み中…</div>
@@ -126,6 +189,7 @@
         <option value="end">エンド</option>
       </select>
     </label>
+    <label>カテゴリ<select name="category"></select></label>
     <label>メモ（任意）<textarea name="note" maxlength="200"></textarea></label>
     <label id="author-label">あなたの名前<input name="author" required maxlength="32" placeholder="登録者として表示されます"></label>
     <p id="form-error"></p>
@@ -138,21 +202,38 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
-const COLORS = ["#e63946", "#ffb703", "#219ebc", "#8338ec", "#ff006e", "#06d6a0", "#fb8500", "#3a86ff"];
+const CATEGORIES = {
+  // 色はゲーム内の染料に合わせている
+  base: { label: "拠点", color: "#b02e26" },
+  village: { label: "村", color: "#fed83d" },
+  portal: { label: "ポータル", color: "#8932b8" },
+  resource: { label: "資源", color: "#169c9c" },
+  farm: { label: "装置・トラップ", color: "#80c71f" },
+  other: { label: "その他", color: "#9d9d97" },
+};
 const DIM = { overworld: "オーバーワールド", nether: "ネザー", end: "エンド" };
 const params = new URLSearchParams(location.search);
 const key = params.get("key") || "";
 let focusId = params.get("focus");
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // マイクラ座標をそのまま使う: lat = Z（南が正）, lng = X。ズーム0で 1px = 16ブロック
 const CRS = L.extend({}, L.CRS.Simple, { transformation: new L.Transformation(1 / 16, 0, 1 / 16, 0) });
 const map = L.map("map", { crs: CRS, minZoom: 0, maxZoom: 6, zoomSnap: 0.5, attributionControl: false })
   .setView([0, 0], 2);
+map.zoomControl.setPosition("topright"); // 左上はゲームと同じく座標表示に使う
 
 const markers = new L.LayerGroup().addTo(map);
 let points = [];
 const byId = new Map();
 let canEdit = false; // 合言葉が正しいときだけ追加・編集できる
+
+// 表示の絞り込み（ブラウザに記憶）
+const view = (() => {
+  try { return { hidden: [], nether: false, ...JSON.parse(localStorage.getItem("view") || "{}") }; }
+  catch { return { hidden: [], nether: false }; }
+})();
+function saveView() { try { localStorage.setItem("view", JSON.stringify(view)); } catch {} }
 
 fetch("tiles/meta.json").then((r) => r.json()).then((meta) => {
   const R = meta.radius;
@@ -164,15 +245,17 @@ fetch("tiles/meta.json").then((r) => r.json()).then((meta) => {
 }).catch(() => setStatus("地図タイルがありません（gen_tiles.py を実行してください）"));
 
 const coordsEl = document.getElementById("coords");
+map.on("mouseout", () => (coordsEl.textContent = ""));
 map.on("mousemove", (e) => {
-  coordsEl.textContent = `X ${Math.floor(e.latlng.lng)}  Z ${Math.floor(e.latlng.lat)}`;
+  coordsEl.textContent = `位置: ${Math.floor(e.latlng.lng)}, ${Math.floor(e.latlng.lat)}`;
 });
 
 map.on("click", (e) => {
   const x = Math.floor(e.latlng.lng), z = Math.floor(e.latlng.lat);
   const cmd = `/add name: x:${x} z:${z}`;
   const el = document.createElement("div");
-  el.innerHTML = `<b>X ${x} / Z ${z}</b><br>ネザー: X ${Math.floor(x / 8)} / Z ${Math.floor(z / 8)}` +
+  el.innerHTML = `<span class="pos">X ${x}　Z ${z}</span>` +
+    `<span class="muted">ネザーでは X ${Math.floor(x / 8)}　Z ${Math.floor(z / 8)}</span>` +
     `<div class="actions"></div>`;
   const actions = el.querySelector(".actions");
   if (canEdit) {
@@ -194,16 +277,26 @@ function button(label, cls, onclick) {
 }
 
 function setStatus(s) { document.getElementById("status").textContent = s; }
-function color(p) { return COLORS[p.id % COLORS.length]; }
+function category(p) { return Object.hasOwn(CATEGORIES, p.category) ? CATEGORIES[p.category] : CATEGORIES.other; }
+function color(p) { return category(p).color; }
+
+// 地図に出すかどうか（エンドは座標系が違うので出さない）
+function visible(p) {
+  if (view.hidden.includes(p.category || "other")) return false;
+  return p.dimension === "overworld" || (p.dimension === "nether" && view.nether);
+}
 
 function render() {
   markers.clearLayers();
   byId.clear();
   for (const p of points) {
-    if (p.dimension !== "overworld") continue;
-    const m = L.circleMarker([p.z, p.x], {
-      radius: 7, color: "#fff", weight: 2, fillColor: color(p), fillOpacity: 1,
-    }).bindTooltip(`#${p.id} ${escapeHtml(p.name)}`, {
+    if (!visible(p)) continue;
+    const nether = p.dimension === "nether";
+    // ネザーの座標は 8 倍した地上の位置に、点線の枠で描く
+    const m = L.circleMarker(nether ? [p.z * 8, p.x * 8] : [p.z, p.x], {
+      radius: 7, color: "#fff", weight: 2, dashArray: nether ? "2 3" : null,
+      fillColor: color(p), fillOpacity: nether ? 0.55 : 1,
+    }).bindTooltip(`#${p.id} ${escapeHtml(p.name)}${nether ? "（ネザー）" : ""}`, {
       permanent: true, direction: "right", offset: [8, 0], className: "pin-label",
     }).bindPopup(() => popupEl(p));
     markers.addLayer(m);
@@ -213,12 +306,17 @@ function render() {
 }
 
 function popupEl(p) {
-  const y = p.y !== null ? ` / Y ${p.y}` : "";
+  const y = p.y !== null ? `　Y ${p.y}` : "";
   const el = document.createElement("div");
-  el.innerHTML = `<b>#${p.id} ${escapeHtml(p.name)}</b><br>X ${p.x}${y} / Z ${p.z}` +
-    `<br>ネザー: X ${Math.floor(p.x / 8)} / Z ${Math.floor(p.z / 8)}` +
+  const nether = p.dimension === "nether";
+  const conv = nether
+    ? `地上では X ${p.x * 8}　Z ${p.z * 8}`
+    : `ネザーでは X ${Math.floor(p.x / 8)}　Z ${Math.floor(p.z / 8)}`;
+  el.innerHTML = `<b>#${p.id} ${escapeHtml(p.name)}</b> <span class="muted">${category(p).label}${nether ? "（ネザー）" : ""}</span>` +
+    `<span class="pos">X ${p.x}${y}　Z ${p.z}</span>` +
+    `<span class="muted">${conv}</span>` +
     (p.note ? `<br>${escapeHtml(p.note)}` : "") +
-    `<br><small>${escapeHtml(p.author)}・${escapeHtml(p.created_at)}</small>`;
+    `<br><small class="muted">登録: ${escapeHtml(p.author)}（${escapeHtml(p.created_at)}）</small>`;
   if (canEdit) {
     const actions = document.createElement("div");
     actions.className = "actions";
@@ -235,38 +333,78 @@ function renderList() {
   const q = document.getElementById("search").value.trim().toLowerCase();
   const list = document.getElementById("list");
   list.replaceChildren();
-  const shown = points.filter((p) => !q || p.name.toLowerCase().includes(q) || (p.note || "").toLowerCase().includes(q));
+  const shown = points.filter((p) => !view.hidden.includes(p.category || "other") &&
+    (!q || p.name.toLowerCase().includes(q) || (p.note || "").toLowerCase().includes(q)));
   for (const p of shown) {
     const li = document.createElement("li");
-    const onMap = p.dimension === "overworld";
+    const onMap = byId.has(String(p.id));
     li.className = onMap ? "" : "off";
-    const y = p.y !== null ? ` Y ${p.y}` : "";
-    li.innerHTML = `<div class="name"><span class="dot"></span><span class="n"></span></div>` +
-      `<div class="sub">X ${p.x}${y} Z ${p.z}</div>`;
-    li.querySelector(".dot").style.background = onMap ? color(p) : "transparent";
+    const y = p.y !== null ? `　Y ${p.y}` : "";
+    li.innerHTML = `<div class="name"><span class="swatch"></span><span class="n"></span></div>` +
+      `<div class="pos">X ${p.x}${y}　Z ${p.z}</div>`;
+    li.querySelector(".swatch").style.background = color(p);
     li.querySelector(".n").textContent = `#${p.id} ${p.name}`;
-    if (!onMap) li.querySelector(".name").insertAdjacentHTML("beforeend", `<span class="tag">${DIM[p.dimension]}</span>`);
+    if (p.dimension !== "overworld") li.querySelector(".name").insertAdjacentHTML("beforeend", `<span class="tag">${DIM[p.dimension]}</span>`);
     if (p.note) {
       const note = document.createElement("div");
-      note.className = "sub";
+      note.className = "note";
       note.textContent = p.note;
       li.append(note);
     }
     if (canEdit) {
-      li.querySelector(".name").prepend(button("編集", "edit", (ev) => { ev.stopPropagation(); openEditor(p); }));
+      li.querySelector(".name").append(button("編集", "edit", (ev) => { ev.stopPropagation(); openEditor(p); }));
     }
     if (onMap) li.onclick = () => focus(p.id);
     list.append(li);
   }
-  setStatus(`${points.length} 件（オーバーワールド ${byId.size} 件を地図に表示）`);
+  if (!shown.length) {
+    const li = document.createElement("li");
+    li.className = "empty";
+    li.textContent = points.length
+      ? "条件に合う座標はありません。検索語やカテゴリの絞り込みを変えてください。"
+      : canEdit ? "まだ座標がありません。地図をクリックすると、その場所を登録できます。"
+      : "まだ座標がありません。Discord の /add で登録できます。";
+    list.append(li);
+  }
+  setStatus(`${points.length} 件（地図に ${byId.size} 件表示）`);
+}
+
+function renderFilters() {
+  const box = document.getElementById("filters");
+  box.replaceChildren();
+  for (const [k, c] of Object.entries(CATEGORIES)) {
+    const chip = button("", "chip" + (view.hidden.includes(k) ? " hidden" : ""), () => {
+      view.hidden = view.hidden.includes(k) ? view.hidden.filter((h) => h !== k) : [...view.hidden, k];
+      saveView();
+      renderFilters();
+      render();
+    });
+    chip.setAttribute("aria-pressed", String(!view.hidden.includes(k)));
+    chip.innerHTML = `<span class="swatch"></span>`;
+    chip.querySelector(".swatch").style.background = c.color;
+    chip.append(c.label);
+    box.append(chip);
+  }
+  document.getElementById("show-nether").checked = view.nether;
 }
 
 function focus(id) {
-  const m = byId.get(String(id));
-  if (!m) return;
+  let m = byId.get(String(id));
+  if (!m) {
+    // 絞り込みで隠れている座標を指定されたら、表示を広げてから移動する
+    const p = points.find((p) => String(p.id) === String(id));
+    if (!p || p.dimension === "end") return;
+    view.hidden = view.hidden.filter((h) => h !== (p.category || "other"));
+    if (p.dimension === "nether") view.nether = true;
+    saveView();
+    renderFilters();
+    render();
+    m = byId.get(String(id));
+    if (!m) return;
+  }
   // スマホでは一覧をたたんで地図を広げてから移動する
   if (matchMedia("(max-width: 700px)").matches) setCollapsed(true);
-  map.flyTo(m.getLatLng(), Math.max(map.getZoom(), 3), { duration: 0.6 });
+  map.flyTo(m.getLatLng(), Math.max(map.getZoom(), 3), { duration: 0.6, animate: !reduceMotion });
   m.openPopup();
 }
 
@@ -318,6 +456,7 @@ function openEditor(p) {
   document.getElementById("form-error").textContent = "";
   for (const k of ["name", "x", "y", "z", "note"]) form.elements[k].value = p[k] ?? "";
   form.elements.dimension.value = p.dimension || "overworld";
+  form.elements.category.value = p.category || "other";
   form.elements.author.value = readName();
   form.elements.author.required = !editing;
   editor.showModal();
@@ -331,7 +470,7 @@ form.addEventListener("submit", async (e) => {
   const f = form.elements;
   const body = {
     name: f.name.value, x: f.x.value, y: f.y.value, z: f.z.value,
-    dimension: f.dimension.value, note: f.note.value,
+    dimension: f.dimension.value, category: f.category.value, note: f.note.value,
   };
   if (!editing) {
     body.author = f.author.value;
@@ -351,7 +490,7 @@ form.addEventListener("submit", async (e) => {
       return;
     }
     editor.close();
-    focusId = data.dimension === "overworld" ? String(data.id) : null;
+    focusId = data.dimension !== "end" ? String(data.id) : null;
     await load();
   } catch {
     document.getElementById("form-error").textContent = "保存に失敗しました（通信エラー）";
@@ -373,6 +512,13 @@ function escapeHtml(s) {
 }
 
 document.getElementById("search").addEventListener("input", renderList);
+document.getElementById("show-nether").addEventListener("change", (e) => {
+  view.nether = e.target.checked;
+  saveView();
+  render();
+});
+for (const [k, c] of Object.entries(CATEGORIES)) form.elements.category.add(new Option(c.label, k));
+renderFilters();
 document.getElementById("add").onclick = () => {
   const c = map.getCenter();
   openEditor({ x: Math.floor(c.lng), z: Math.floor(c.lat) });

@@ -13,24 +13,27 @@ Discord のスラッシュコマンドで座標を登録し、シード値から
 
 | コマンド | 内容 |
 |---|---|
-| `/add name x z [y] [dimension] [note]` | 座標を登録（ネザー換算座標も表示） |
-| `/list [dimension] [keyword]` | 一覧・検索 |
+| `/add name x z [y] [dimension] [category] [note]` | 座標を登録（ネザー換算座標も表示） |
+| `/list [dimension] [category] [keyword]` | 一覧・検索 |
 | `/info point` | 詳細（登録者・日時・ネザー換算） |
-| `/edit point [name] [x] [y] [z] [note]` | 修正 |
+| `/edit point [name] [x] [y] [z] [category] [note]` | 修正 |
 | `/delete point` | 削除 |
 | `/map [point]` | 地図ページのリンクを表示 |
 
 `point` は名前・番号でオートコンプリートされます。
 
+カテゴリは 拠点 / 村 / ポータル / 資源 / 装置・トラップ / その他 の 6 種類（未指定は「その他」）。
+
 ### 地図ページ
 
 - シード値から事前生成した地形タイル（バイオーム色 + 陰影）を Leaflet で表示
 - 登録座標をピンとラベルで表示、サイドバーから検索・ジャンプ
+- カテゴリごとにピンを色分けし、サイドバーで表示・非表示を切り替え
 - 地図をクリックするとその地点の座標・ネザー換算を表示し、そのまま登録できる
 - 座標の追加・編集・削除（登録者名はブラウザに記憶）
 - 座標の閲覧・編集には合言葉（`MAP_KEY`）が必要。`/map` が出すリンクに含まれる。合言葉なしでは地形だけが見える
 
-地図はオーバーワールドのみ。ネザー・エンドの座標は一覧に表示されます。
+地図はオーバーワールドの地形です。ネザーの座標はサイドバーのチェックで、8 倍した地上の位置に点線のピンで重ねて表示できます。エンドの座標は一覧にだけ表示されます。
 
 ## 構成
 
@@ -91,6 +94,17 @@ DISCORD_APPLICATION_ID=... DISCORD_TOKEN=... DISCORD_GUILD_ID=... npm run regist
 | `DISCORD_PUBLIC_KEY` | Discord からのリクエストの署名検証 | `wrangler secret put` |
 | `MAP_KEY` | 地図ページで座標を見る・編集するための合言葉（未設定だと閲覧は誰でも可、Web からの編集は不可） | `wrangler secret put` |
 | `DISCORD_APPLICATION_ID` / `DISCORD_TOKEN` / `DISCORD_GUILD_ID` | コマンド登録時のみ使用 | 実行時の環境変数 |
+
+### 既存の環境をアップデートするとき
+
+カテゴリ機能の追加で D1 に列が増えています。以前のバージョンから更新する場合は一度だけ次を実行してください。
+
+```bash
+cd worker
+npm run db:migrate   # points に category 列を追加（既存の座標は「その他」になる）
+npm run deploy
+DISCORD_APPLICATION_ID=... DISCORD_TOKEN=... DISCORD_GUILD_ID=... npm run register   # コマンドのオプション追加を反映
+```
 
 ### ローカル開発
 

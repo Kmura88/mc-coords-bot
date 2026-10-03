@@ -9,6 +9,9 @@
 //   それ以外            … public/ の静的ファイル（地図ページ・タイル）
 
 const DIMENSIONS = { overworld: "オーバーワールド", nether: "ネザー", end: "エンド" };
+const CATEGORIES = {
+  base: "拠点", village: "村", portal: "ポータル", resource: "資源", farm: "装置・トラップ", other: "その他",
+};
 
 // Discord の定数
 const PING = 1, APPLICATION_COMMAND = 2, AUTOCOMPLETE = 4;
@@ -50,8 +53,8 @@ async function handleApi(request, env, url) {
     const input = validatePoint(await request.json().catch(() => null), true);
     if (input.error) return Response.json(input, { status: 400 });
     const p = await env.DB.prepare(
-      "INSERT INTO points (name, x, y, z, dimension, note, author) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *",
-    ).bind(input.name, input.x, input.y, input.z, input.dimension, input.note, input.author).first();
+      "INSERT INTO points (name, x, y, z, dimension, category, note, author) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
+    ).bind(input.name, input.x, input.y, input.z, input.dimension, input.category, input.note, input.author).first();
     return Response.json(p, { status: 201 });
   }
 
@@ -110,10 +113,16 @@ function validatePoint(body, required) {
     text("author", 32, false);
   if (err) return { error: err };
   if ("dimension" in body) {
-    if (!(body.dimension in DIMENSIONS)) return { error: "ディメンションが正しくありません" };
+    if (!Object.hasOwn(DIMENSIONS, body.dimension)) return { error: "ディメンションが正しくありません" };
     out.dimension = body.dimension;
   } else if (required) {
     out.dimension = "overworld";
+  }
+  if ("category" in body) {
+    if (!Object.hasOwn(CATEGORIES, body.category)) return { error: "カテゴリが正しくありません" };
+    out.category = body.category;
+  } else if (required) {
+    out.category = "other";
   }
   if (required) {
     out.y ??= null;
@@ -156,12 +165,12 @@ async function handleInteraction(request, env) {
     case "add": {
       const dim = val("dimension") ?? "overworld";
       const p = await env.DB.prepare(
-        "INSERT INTO points (name, x, y, z, dimension, note, author) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *",
-      ).bind(val("name"), val("x"), val("y") ?? null, val("z"), dim, val("note") ?? null, author).first();
+        "INSERT INTO points (name, x, y, z, dimension, category, note, author) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
+      ).bind(val("name"), val("x"), val("y") ?? null, val("z"), dim, val("category") ?? "other", val("note") ?? null, author).first();
       let msg = `📍 登録しました\n${fmtPoint(p)}`;
       const hint = portalHint(p);
       if (hint) msg += `\n-# ${hint}`;
-      if (dim === "overworld") msg += `\n-# [地図で見る](<${mapUrl(origin, env, p.id)}>)`;
+      if (dim !== "end") msg += `\n-# [地図で見る](<${mapUrl(origin, env, p.id)}>)`;
       return reply(msg);
     }
 
@@ -169,6 +178,7 @@ async function handleInteraction(request, env) {
       let sql = "SELECT * FROM points WHERE 1 = 1";
       const args = [];
       if (val("dimension")) { sql += " AND dimension = ?"; args.push(val("dimension")); }
+      if (val("category")) { sql += " AND category = ?"; args.push(val("category")); }
       if (val("keyword")) { sql += " AND (name LIKE ? OR note LIKE ?)"; args.push(`%${val("keyword")}%`, `%${val("keyword")}%`); }
       const { results } = await env.DB.prepare(sql + " ORDER BY id").bind(...args).all();
       if (!results.length) return reply("該当する座標はありません。", true);
@@ -196,7 +206,7 @@ async function handleInteraction(request, env) {
     case "edit": {
       const id = val("point");
       if (!(await getPoint(env, id))) return notFound(id);
-      const fields = ["name", "x", "y", "z", "note"].filter((k) => val(k) !== undefined);
+      const fields = ["name", "x", "y", "z", "category", "note"].filter((k) => val(k) !== undefined);
       if (fields.length) {
         await env.DB.prepare(`UPDATE points SET ${fields.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`)
           .bind(...fields.map(val), id).run();
@@ -215,7 +225,7 @@ async function handleInteraction(request, env) {
       if (id !== undefined) {
         const p = await getPoint(env, id);
         if (!p) return notFound(id);
-        if (p.dimension !== "overworld") return reply("地図はオーバーワールドのみ対応しています。", true);
+        if (p.dimension === "end") return reply("エンドの座標は地図に表示できません。", true);
       }
       return reply(`🗺️ ${mapUrl(origin, env, id)}`);
     }
@@ -251,6 +261,7 @@ function fmtPoint(p) {
   const y = p.y !== null ? ` Y=${p.y}` : "";
   let s = `**#${p.id} ${p.name}**  X=${p.x}${y} Z=${p.z}`;
   if (p.dimension !== "overworld") s += `  (${DIMENSIONS[p.dimension]})`;
+  if (Object.hasOwn(CATEGORIES, p.category) && p.category !== "other") s += `  [${CATEGORIES[p.category]}]`;
   if (p.note) s += `\n　└ ${p.note}`;
   return s;
 }

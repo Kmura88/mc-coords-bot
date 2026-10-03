@@ -10,6 +10,17 @@ const DIMENSION = {
     { name: "エンド", value: "end" },
   ],
 };
+const CATEGORY = {
+  type: STRING, name: "category", description: "カテゴリ（既定: その他）",
+  choices: [
+    { name: "拠点", value: "base" },
+    { name: "村", value: "village" },
+    { name: "ポータル", value: "portal" },
+    { name: "資源", value: "resource" },
+    { name: "装置・トラップ", value: "farm" },
+    { name: "その他", value: "other" },
+  ],
+};
 const POINT = (description) => ({
   type: INTEGER, name: "point", description, required: true, autocomplete: true,
 });
@@ -23,6 +34,7 @@ export const COMMANDS = [
       { type: INTEGER, name: "z", description: "Z座標", required: true },
       { type: INTEGER, name: "y", description: "Y座標（任意）" },
       DIMENSION,
+      CATEGORY,
       { type: STRING, name: "note", description: "メモ（任意）", max_length: 200 },
     ],
   },
@@ -30,6 +42,7 @@ export const COMMANDS = [
     name: "list", description: "登録済みの座標一覧を表示します",
     options: [
       { ...DIMENSION, description: "ディメンションで絞り込み" },
+      { ...CATEGORY, description: "カテゴリで絞り込み" },
       { type: STRING, name: "keyword", description: "名前・メモで検索" },
     ],
   },
@@ -42,6 +55,7 @@ export const COMMANDS = [
       { type: INTEGER, name: "x", description: "X座標" },
       { type: INTEGER, name: "y", description: "Y座標" },
       { type: INTEGER, name: "z", description: "Z座標" },
+      { ...CATEGORY, description: "カテゴリ" },
       { type: STRING, name: "note", description: "メモ", max_length: 200 },
     ],
   },
