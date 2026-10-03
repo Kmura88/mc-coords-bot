@@ -1,0 +1,9 @@
+# ビルド成果物
+maptools/libmapgen.so
+__pycache__/
+
+# シード値から再生成できる地図タイル
+worker/public/tiles/
+
+# 個人用メモ
+PRIVATE_NOTES.md

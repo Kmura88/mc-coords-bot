@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>座標マップ</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root {
+    --bg: #f6f6f4; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --border: #e2e1dc; --hover: #f0efea; --accent: #2f7d4f; --map-bg: #1b2a3a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161716; --panel: #1f201f; --text: #ecece8; --muted: #9a9a94;
+      --border: #333430; --hover: #2a2b29; --accent: #5fbf85; --map-bg: #0f1822;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #161716; --panel: #1f201f; --text: #ecece8; --muted: #9a9a94;
+    --border: #333430; --hover: #2a2b29; --accent: #5fbf85; --map-bg: #0f1822;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    display: flex; height: 100dvh; overflow: hidden;
+  }
+  #side {
+    width: 300px; flex: none; display: flex; flex-direction: column;
+    background: var(--panel); border-right: 1px solid var(--border);
+  }
+  #side header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
+  #side h1 { font-size: 16px; margin: 0 0 8px; }
+  #search {
+    width: 100%; padding: 7px 10px; font: inherit; color: var(--text);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  }
+  #list { list-style: none; margin: 0; padding: 4px 0; overflow-y: auto; flex: 1; }
+  #list li { padding: 8px 16px; cursor: pointer; border-left: 3px solid transparent; }
+  #list li:hover { background: var(--hover); }
+  #list li.off { cursor: default; }
+  #list .name { font-weight: 600; }
+  #list .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+  #list .sub { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  #list .tag { font-size: 11px; padding: 0 5px; border-radius: 4px; border: 1px solid var(--border); margin-left: 4px; color: var(--muted); }
+  #status { padding: 8px 16px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--border); }
+  #map { flex: 1; background: var(--map-bg); }
+  #coords {
+    position: absolute; left: 10px; bottom: 10px; z-index: 1000; pointer-events: none;
+    background: rgba(0,0,0,.6); color: #fff; padding: 3px 8px; border-radius: 4px;
+    font-size: 12px; font-variant-numeric: tabular-nums;
+  }
+  #coords:empty { display: none; }
+  .pin-label {
+    background: rgba(0,0,0,.65); color: #fff; border: none; box-shadow: none;
+    font-weight: 600; padding: 1px 6px;
+  }
+  .pin-label::before { display: none; }
+  .leaflet-popup-content { font: 13px/1.5 system-ui, sans-serif; }
+  .leaflet-popup-content code { display: block; margin-top: 4px; padding: 4px 6px; background: #f0f0ec; border-radius: 4px; user-select: all; }
+  .leaflet-popup-content button { margin-top: 6px; font: inherit; padding: 3px 10px; cursor: pointer; }
+  #toggle { display: none; }
+  @media (max-width: 700px) {
+    body { flex-direction: column-reverse; }
+    #side { width: 100%; height: 38dvh; border-right: none; border-top: 1px solid var(--border); }
+    #side.collapsed { height: auto; }
+    #side.collapsed #list, #side.collapsed #status, #side.collapsed #search { display: none; }
+    #side h1 { display: flex; justify-content: space-between; align-items: center; margin: 0 0 8px; }
+    #toggle { display: inline-block; font: inherit; background: none; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 2px 10px; }
+  }
+</style>
+</head>
+<body>
+<aside id="side">
+  <header>
+    <h1><span>📍 座標マップ</span><button id="toggle" type="button">一覧</button></h1>
+    <input id="search" type="search" placeholder="名前・メモで検索">
+  </header>
+  <ul id="list"></ul>
+  <div id="status">読み込み中…</div>
+</aside>
+<div id="map"><div id="coords"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const COLORS = ["#e63946", "#ffb703", "#219ebc", "#8338ec", "#ff006e", "#06d6a0", "#fb8500", "#3a86ff"];
+const DIM = { overworld: "オーバーワールド", nether: "ネザー", end: "エンド" };
+const params = new URLSearchParams(location.search);
+const key = params.get("key") || "";
+let focusId = params.get("focus");
+
+// マイクラ座標をそのまま使う: lat = Z（南が正）, lng = X。ズーム0で 1px = 16ブロック
+const CRS = L.extend({}, L.CRS.Simple, { transformation: new L.Transformation(1 / 16, 0, 1 / 16, 0) });
+const map = L.map("map", { crs: CRS, minZoom: 0, maxZoom: 6, zoomSnap: 0.5, attributionControl: false })
+  .setView([0, 0], 2);
+
+const markers = new L.LayerGroup().addTo(map);
+let points = [];
+const byId = new Map();
+
+fetch("tiles/meta.json").then((r) => r.json()).then((meta) => {
+  const R = meta.radius;
+  L.tileLayer("tiles/{z}/{y}/{x}.webp", {
+    tileSize: 256, minZoom: 0, maxZoom: 6, maxNativeZoom: meta.maxNativeZoom,
+    bounds: [[-R, -R], [R, R]], noWrap: true,
+  }).addTo(map).bringToBack();
+  map.setMaxBounds([[-R * 1.1, -R * 1.1], [R * 1.1, R * 1.1]]);
+}).catch(() => setStatus("地図タイルがありません（gen_tiles.py を実行してください）"));
+
+const coordsEl = document.getElementById("coords");
+map.on("mousemove", (e) => {
+  coordsEl.textContent = `X ${Math.floor(e.latlng.lng)}  Z ${Math.floor(e.latlng.lat)}`;
+});
+
+map.on("click", (e) => {
+  const x = Math.floor(e.latlng.lng), z = Math.floor(e.latlng.lat);
+  const cmd = `/add name: x:${x} z:${z}`;
+  const el = document.createElement("div");
+  el.innerHTML = `<b>X ${x} / Z ${z}</b><br>ネザー: X ${Math.floor(x / 8)} / Z ${Math.floor(z / 8)}<code></code><button type="button">コマンドをコピー</button>`;
+  el.querySelector("code").textContent = cmd;
+  el.querySelector("button").onclick = (ev) => {
+    navigator.clipboard?.writeText(cmd).then(() => (ev.target.textContent = "コピーしました"));
+  };
+  L.popup().setLatLng(e.latlng).setContent(el).openOn(map);
+});
+
+function setStatus(s) { document.getElementById("status").textContent = s; }
+function color(p) { return COLORS[p.id % COLORS.length]; }
+
+function render() {
+  markers.clearLayers();
+  byId.clear();
+  for (const p of points) {
+    if (p.dimension !== "overworld") continue;
+    const m = L.circleMarker([p.z, p.x], {
+      radius: 7, color: "#fff", weight: 2, fillColor: color(p), fillOpacity: 1,
+    }).bindTooltip(`#${p.id} ${escapeHtml(p.name)}`, {
+      permanent: true, direction: "right", offset: [8, 0], className: "pin-label",
+    }).bindPopup(popupHtml(p));
+    markers.addLayer(m);
+    byId.set(String(p.id), m);
+  }
+  renderList();
+}
+
+function popupHtml(p) {
+  const y = p.y !== null ? ` / Y ${p.y}` : "";
+  return `<b>#${p.id} ${escapeHtml(p.name)}</b><br>X ${p.x}${y} / Z ${p.z}` +
+    `<br>ネザー: X ${Math.floor(p.x / 8)} / Z ${Math.floor(p.z / 8)}` +
+    (p.note ? `<br>${escapeHtml(p.note)}` : "") +
+    `<br><small>${escapeHtml(p.author)}・${escapeHtml(p.created_at)}</small>`;
+}
+
+function renderList() {
+  const q = document.getElementById("search").value.trim().toLowerCase();
+  const list = document.getElementById("list");
+  list.replaceChildren();
+  const shown = points.filter((p) => !q || p.name.toLowerCase().includes(q) || (p.note || "").toLowerCase().includes(q));
+  for (const p of shown) {
+    const li = document.createElement("li");
+    const onMap = p.dimension === "overworld";
+    li.className = onMap ? "" : "off";
+    const y = p.y !== null ? ` Y ${p.y}` : "";
+    li.innerHTML = `<div class="name"><span class="dot"></span><span class="n"></span></div>` +
+      `<div class="sub">X ${p.x}${y} Z ${p.z}</div>`;
+    li.querySelector(".dot").style.background = onMap ? color(p) : "transparent";
+    li.querySelector(".n").textContent = `#${p.id} ${p.name}`;
+    if (!onMap) li.querySelector(".name").insertAdjacentHTML("beforeend", `<span class="tag">${DIM[p.dimension]}</span>`);
+    if (p.note) {
+      const note = document.createElement("div");
+      note.className = "sub";
+      note.textContent = p.note;
+      li.append(note);
+    }
+    if (onMap) li.onclick = () => focus(p.id);
+    list.append(li);
+  }
+  setStatus(`${points.length} 件（オーバーワールド ${byId.size} 件を地図に表示）`);
+}
+
+function focus(id) {
+  const m = byId.get(String(id));
+  if (!m) return;
+  // スマホでは一覧をたたんで地図を広げてから移動する
+  if (matchMedia("(max-width: 700px)").matches) setCollapsed(true);
+  map.flyTo(m.getLatLng(), Math.max(map.getZoom(), 3), { duration: 0.6 });
+  m.openPopup();
+}
+
+// サイドバーの開閉で地図の大きさが変わるので Leaflet に知らせる
+function setCollapsed(collapsed) {
+  document.getElementById("side").classList.toggle("collapsed", collapsed);
+  map.invalidateSize();
+}
+
+async function load() {
+  try {
+    const res = await fetch(`api/points?key=${encodeURIComponent(key)}`);
+    if (res.status === 403) {
+      setStatus("このリンクでは座標を表示できません。Discord の /map で出るリンクから開いてください。");
+      return;
+    }
+    const text = await res.text();
+    if (text !== load.last) {
+      load.last = text;
+      points = JSON.parse(text);
+      render();
+    }
+    if (focusId) { focus(focusId); focusId = null; }
+    else if (!load.done && byId.size) map.fitBounds(L.featureGroup([...byId.values()]).getBounds().pad(0.2), { maxZoom: 3 });
+    load.done = true;
+  } catch {
+    setStatus("座標の読み込みに失敗しました");
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
+document.getElementById("search").addEventListener("input", renderList);
+document.getElementById("toggle").onclick = () =>
+  setCollapsed(!document.getElementById("side").classList.contains("collapsed"));
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>
