@@ -10,7 +10,8 @@
 
 const DIMENSIONS = { overworld: "オーバーワールド", nether: "ネザー", end: "エンド" };
 const CATEGORIES = {
-  base: "拠点", village: "村", portal: "ポータル", resource: "資源", farm: "装置・トラップ", other: "その他",
+  base: "拠点", village: "村", ruins: "遺跡", cave: "洞窟", portal: "ポータル", resource: "資源",
+  farm: "装置・トラップ", other: "その他",
 };
 
 // Discord の定数

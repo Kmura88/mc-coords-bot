@@ -15,6 +15,8 @@ const CATEGORY = {
   choices: [
     { name: "拠点", value: "base" },
     { name: "村", value: "village" },
+    { name: "遺跡", value: "ruins" },
+    { name: "洞窟", value: "cave" },
     { name: "ポータル", value: "portal" },
     { name: "資源", value: "resource" },
     { name: "装置・トラップ", value: "farm" },

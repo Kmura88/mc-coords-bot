@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=M+PLUS+1p:wght@400;700&display=swap">
 <style>
-  /* 石材のグレーを地に、ゲーム内の「座標を表示」と同じドット文字を座標の表示に使う */
+  /* 石材のグレーを地に、見出しだけゲーム風のドット文字。座標や本文は読みやすさ優先で普通の書体 */
   :root {
     --ground: #dcddd9; --panel: #f3f3f0; --field: #ffffff; --text: #1f2124; --muted: #61656b;
     --line: #b9bbb6; --hover: #e7e8e4; --edge: #8e918b;
@@ -90,7 +90,7 @@
   #list li.off .name { color: var(--muted); }
   #list .name { font-weight: 700; display: flex; align-items: center; gap: 7px; }
   #list .n { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-  #list .pos { font: 13px/1.5 var(--pixel); color: var(--muted); margin-left: 17px; }
+  #list .pos { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--muted); margin-left: 17px; }
   #list .note { color: var(--muted); font-size: 12px; margin-left: 17px; }
   #list .edit { font: 12px var(--body); color: var(--muted); background: none; border: none; cursor: pointer; padding: 0; }
   #list .edit:hover { color: var(--text); text-decoration: underline; }
@@ -105,12 +105,12 @@
   #coords {
     position: absolute; left: 10px; top: 10px; z-index: 1000; pointer-events: none;
     background: var(--hud-bg); color: #fff; padding: 2px 8px 3px;
-    font: 16px/1.4 var(--pixel); text-shadow: 2px 2px 0 #3f3f3f;
+    font: 700 14px/1.5 var(--body); font-variant-numeric: tabular-nums; border-radius: 3px;
   }
   #coords:empty { display: none; }
   .pin-label {
     background: var(--hud-bg); color: #fff; border: none; border-radius: 0; box-shadow: none;
-    font: 13px/1.4 var(--pixel); text-shadow: 1px 1px 0 #3f3f3f; padding: 1px 6px;
+    font: 700 12px/1.5 var(--body); padding: 1px 6px; border-radius: 3px;
   }
   .pin-label::before { display: none; }
   .leaflet-popup-content-wrapper, .leaflet-popup-tip {
@@ -119,7 +119,7 @@
   }
   .leaflet-popup-content { font: 13px/1.6 var(--body); margin: 12px 14px; }
   .leaflet-popup-content b { font-size: 14px; }
-  .leaflet-popup-content .pos { font: 15px/1.5 var(--pixel); display: block; margin-top: 2px; }
+  .leaflet-popup-content .pos { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; display: block; margin-top: 2px; }
   .leaflet-popup-content .muted { color: var(--muted); }
   .leaflet-popup-content .actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
   .leaflet-container a.leaflet-popup-close-button { color: var(--muted); }
@@ -139,7 +139,7 @@
     font: inherit; font-size: 14px; color: var(--text); background: var(--field);
     border: 1px solid var(--line); border-radius: 2px; padding: 6px 8px; width: 100%;
   }
-  dialog input[type="number"] { font: 16px/1.3 var(--pixel); }
+  dialog input[type="number"] { font-variant-numeric: tabular-nums; }
   dialog label[hidden] { display: none; }
   dialog textarea { resize: vertical; min-height: 54px; }
   dialog .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
@@ -206,6 +206,8 @@ const CATEGORIES = {
   // 色はゲーム内の染料に合わせている
   base: { label: "拠点", color: "#b02e26" },
   village: { label: "村", color: "#fed83d" },
+  ruins: { label: "遺跡", color: "#835432" },
+  cave: { label: "洞窟", color: "#3c44aa" },
   portal: { label: "ポータル", color: "#8932b8" },
   resource: { label: "資源", color: "#169c9c" },
   farm: { label: "装置・トラップ", color: "#80c71f" },
