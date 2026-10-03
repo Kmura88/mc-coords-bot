@@ -1,14 +1,17 @@
 {
-  "name": "mc-coords",
-  "main": "src/index.js",
-  "compatibility_date": "2026-09-01",
-  "assets": { "directory": "./public", "binding": "ASSETS" },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "mc-coords",
-      // `npx wrangler d1 create mc-coords --binding DB --update-config` で自動的に書き換わる
-      "database_id": "REPLACE_WITH_DATABASE_ID"
-    }
-  ]
+	"name": "mc-coords",
+	"main": "src/index.js",
+	"compatibility_date": "2026-09-01",
+	"assets": {
+		"directory": "./public",
+		"binding": "ASSETS"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "mc-coords",
+			// `npx wrangler d1 create mc-coords --binding DB --update-config` で自動的に書き換わる
+			"database_id": "047b94fe-3eaa-496f-9263-7e64fb7e7285"
+		}
+	]
 }

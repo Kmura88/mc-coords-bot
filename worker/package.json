@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "predeploy": "node -e \"require('fs').existsSync('public/tiles/meta.json')||(console.error('地図タイルがありません。先に maptools で python3 gen_tiles.py <シード値> を実行してください（このままデプロイすると公開中の地図が消えます）'),process.exit(1))\"",
     "deploy": "wrangler deploy",
     "db:init": "wrangler d1 execute mc-coords --remote --file=schema.sql",
     "register": "node scripts/register-commands.js"

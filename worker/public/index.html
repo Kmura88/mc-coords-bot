@@ -32,7 +32,16 @@
     background: var(--panel); border-right: 1px solid var(--border);
   }
   #side header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
-  #side h1 { font-size: 16px; margin: 0 0 8px; }
+  #side h1 { font-size: 16px; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+  #side h1 span { flex: 1; }
+  .btn {
+    font: inherit; font-size: 13px; padding: 3px 12px; cursor: pointer; border-radius: 6px;
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+  }
+  .btn:hover { background: var(--hover); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.danger { color: #c0392b; }
+  #add[hidden] { display: none; }
   #search {
     width: 100%; padding: 7px 10px; font: inherit; color: var(--text);
     background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
@@ -44,6 +53,8 @@
   #list .name { font-weight: 600; }
   #list .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
   #list .sub { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  #list .edit { float: right; font-size: 12px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 0; }
+  #list .edit:hover { color: var(--text); text-decoration: underline; }
   #list .tag { font-size: 11px; padding: 0 5px; border-radius: 4px; border: 1px solid var(--border); margin-left: 4px; color: var(--muted); }
   #status { padding: 8px 16px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--border); }
   #map { flex: 1; background: var(--map-bg); }
@@ -60,28 +71,70 @@
   .pin-label::before { display: none; }
   .leaflet-popup-content { font: 13px/1.5 system-ui, sans-serif; }
   .leaflet-popup-content code { display: block; margin-top: 4px; padding: 4px 6px; background: #f0f0ec; border-radius: 4px; user-select: all; }
-  .leaflet-popup-content button { margin-top: 6px; font: inherit; padding: 3px 10px; cursor: pointer; }
+  .leaflet-popup-content .actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  dialog {
+    border: 1px solid var(--border); border-radius: 10px; padding: 0; width: min(380px, calc(100vw - 32px));
+    background: var(--panel); color: var(--text);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  dialog form { padding: 18px 20px; display: grid; gap: 10px; }
+  dialog h2 { font-size: 16px; margin: 0 0 4px; }
+  dialog label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+  dialog input, dialog select, dialog textarea {
+    font: inherit; font-size: 14px; color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; width: 100%;
+  }
+  dialog label[hidden] { display: none; }
+  dialog textarea { resize: vertical; min-height: 54px; }
+  dialog .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  dialog .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+  #form-error { color: #c0392b; font-size: 13px; min-height: 1em; margin: 0; }
   #toggle { display: none; }
   @media (max-width: 700px) {
     body { flex-direction: column-reverse; }
     #side { width: 100%; height: 38dvh; border-right: none; border-top: 1px solid var(--border); }
     #side.collapsed { height: auto; }
     #side.collapsed #list, #side.collapsed #status, #side.collapsed #search { display: none; }
-    #side h1 { display: flex; justify-content: space-between; align-items: center; margin: 0 0 8px; }
-    #toggle { display: inline-block; font: inherit; background: none; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 2px 10px; }
+    #toggle { display: inline-block; }
   }
 </style>
 </head>
 <body>
 <aside id="side">
   <header>
-    <h1><span>📍 座標マップ</span><button id="toggle" type="button">一覧</button></h1>
+    <h1><span>座標マップ</span><button id="add" class="btn primary" type="button" hidden>追加</button><button id="toggle" class="btn" type="button">一覧</button></h1>
     <input id="search" type="search" placeholder="名前・メモで検索">
   </header>
   <ul id="list"></ul>
   <div id="status">読み込み中…</div>
 </aside>
 <div id="map"><div id="coords"></div></div>
+
+<dialog id="editor">
+  <form method="dialog">
+    <h2 id="form-title">座標を追加</h2>
+    <label>名前<input name="name" required maxlength="50" placeholder="拠点、村、ピグリン交易所など"></label>
+    <div class="row">
+      <label>X<input name="x" type="number" required step="1" inputmode="numeric"></label>
+      <label>Y（任意）<input name="y" type="number" step="1" min="-64" max="320" inputmode="numeric"></label>
+      <label>Z<input name="z" type="number" required step="1" inputmode="numeric"></label>
+    </div>
+    <label>ディメンション
+      <select name="dimension">
+        <option value="overworld">オーバーワールド</option>
+        <option value="nether">ネザー</option>
+        <option value="end">エンド</option>
+      </select>
+    </label>
+    <label>メモ（任意）<textarea name="note" maxlength="200"></textarea></label>
+    <label id="author-label">あなたの名前<input name="author" required maxlength="32" placeholder="登録者として表示されます"></label>
+    <p id="form-error"></p>
+    <div class="buttons">
+      <button class="btn" type="button" value="cancel" id="form-cancel">キャンセル</button>
+      <button class="btn primary" type="submit" id="form-save">保存</button>
+    </div>
+  </form>
+</dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
@@ -99,6 +152,7 @@ const map = L.map("map", { crs: CRS, minZoom: 0, maxZoom: 6, zoomSnap: 0.5, attr
 const markers = new L.LayerGroup().addTo(map);
 let points = [];
 const byId = new Map();
+let canEdit = false; // 合言葉が正しいときだけ追加・編集できる
 
 fetch("tiles/meta.json").then((r) => r.json()).then((meta) => {
   const R = meta.radius;
@@ -118,13 +172,26 @@ map.on("click", (e) => {
   const x = Math.floor(e.latlng.lng), z = Math.floor(e.latlng.lat);
   const cmd = `/add name: x:${x} z:${z}`;
   const el = document.createElement("div");
-  el.innerHTML = `<b>X ${x} / Z ${z}</b><br>ネザー: X ${Math.floor(x / 8)} / Z ${Math.floor(z / 8)}<code></code><button type="button">コマンドをコピー</button>`;
-  el.querySelector("code").textContent = cmd;
-  el.querySelector("button").onclick = (ev) => {
+  el.innerHTML = `<b>X ${x} / Z ${z}</b><br>ネザー: X ${Math.floor(x / 8)} / Z ${Math.floor(z / 8)}` +
+    `<div class="actions"></div>`;
+  const actions = el.querySelector(".actions");
+  if (canEdit) {
+    actions.append(button("ここを登録", "btn primary", () => { map.closePopup(); openEditor({ x, z }); }));
+  }
+  actions.append(button("コマンドをコピー", "btn", (ev) => {
     navigator.clipboard?.writeText(cmd).then(() => (ev.target.textContent = "コピーしました"));
-  };
+  }));
   L.popup().setLatLng(e.latlng).setContent(el).openOn(map);
 });
+
+function button(label, cls, onclick) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = cls;
+  b.textContent = label;
+  b.onclick = onclick;
+  return b;
+}
 
 function setStatus(s) { document.getElementById("status").textContent = s; }
 function color(p) { return COLORS[p.id % COLORS.length]; }
@@ -138,19 +205,30 @@ function render() {
       radius: 7, color: "#fff", weight: 2, fillColor: color(p), fillOpacity: 1,
     }).bindTooltip(`#${p.id} ${escapeHtml(p.name)}`, {
       permanent: true, direction: "right", offset: [8, 0], className: "pin-label",
-    }).bindPopup(popupHtml(p));
+    }).bindPopup(() => popupEl(p));
     markers.addLayer(m);
     byId.set(String(p.id), m);
   }
   renderList();
 }
 
-function popupHtml(p) {
+function popupEl(p) {
   const y = p.y !== null ? ` / Y ${p.y}` : "";
-  return `<b>#${p.id} ${escapeHtml(p.name)}</b><br>X ${p.x}${y} / Z ${p.z}` +
+  const el = document.createElement("div");
+  el.innerHTML = `<b>#${p.id} ${escapeHtml(p.name)}</b><br>X ${p.x}${y} / Z ${p.z}` +
     `<br>ネザー: X ${Math.floor(p.x / 8)} / Z ${Math.floor(p.z / 8)}` +
     (p.note ? `<br>${escapeHtml(p.note)}` : "") +
     `<br><small>${escapeHtml(p.author)}・${escapeHtml(p.created_at)}</small>`;
+  if (canEdit) {
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    actions.append(
+      button("編集", "btn", () => { map.closePopup(); openEditor(p); }),
+      button("削除", "btn danger", () => removePoint(p)),
+    );
+    el.append(actions);
+  }
+  return el;
 }
 
 function renderList() {
@@ -173,6 +251,9 @@ function renderList() {
       note.className = "sub";
       note.textContent = p.note;
       li.append(note);
+    }
+    if (canEdit) {
+      li.querySelector(".name").prepend(button("編集", "edit", (ev) => { ev.stopPropagation(); openEditor(p); }));
     }
     if (onMap) li.onclick = () => focus(p.id);
     list.append(li);
@@ -202,6 +283,11 @@ async function load() {
       setStatus("このリンクでは座標を表示できません。Discord の /map で出るリンクから開いてください。");
       return;
     }
+    if (!canEdit && key) {
+      canEdit = true;
+      document.getElementById("add").hidden = false;
+      load.last = null; // 編集ボタン付きで描き直す
+    }
     const text = await res.text();
     if (text !== load.last) {
       load.last = text;
@@ -216,11 +302,81 @@ async function load() {
   }
 }
 
+// ---- 追加・編集フォーム
+const editor = document.getElementById("editor");
+const form = editor.querySelector("form");
+let editing = null; // 編集中の座標（新規なら null）
+
+function readName() { try { return localStorage.getItem("author") || ""; } catch { return ""; } }
+function saveName(v) { try { localStorage.setItem("author", v); } catch {} }
+
+function openEditor(p) {
+  editing = p.id ? p : null;
+  form.reset();
+  document.getElementById("form-title").textContent = editing ? `#${p.id} を編集` : "座標を追加";
+  document.getElementById("author-label").hidden = !!editing;
+  document.getElementById("form-error").textContent = "";
+  for (const k of ["name", "x", "y", "z", "note"]) form.elements[k].value = p[k] ?? "";
+  form.elements.dimension.value = p.dimension || "overworld";
+  form.elements.author.value = readName();
+  form.elements.author.required = !editing;
+  editor.showModal();
+  form.elements.name.focus();
+}
+
+document.getElementById("form-cancel").onclick = () => editor.close();
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = form.elements;
+  const body = {
+    name: f.name.value, x: f.x.value, y: f.y.value, z: f.z.value,
+    dimension: f.dimension.value, note: f.note.value,
+  };
+  if (!editing) {
+    body.author = f.author.value;
+    saveName(f.author.value.trim());
+  }
+  const save = document.getElementById("form-save");
+  save.disabled = true;
+  try {
+    const res = await fetch(editing ? `api/points/${editing.id}?key=${encodeURIComponent(key)}` : `api/points?key=${encodeURIComponent(key)}`, {
+      method: editing ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      document.getElementById("form-error").textContent = data.error || "保存に失敗しました";
+      return;
+    }
+    editor.close();
+    focusId = data.dimension === "overworld" ? String(data.id) : null;
+    await load();
+  } catch {
+    document.getElementById("form-error").textContent = "保存に失敗しました（通信エラー）";
+  } finally {
+    save.disabled = false;
+  }
+});
+
+async function removePoint(p) {
+  if (!confirm(`#${p.id} ${p.name} を削除しますか？`)) return;
+  const res = await fetch(`api/points/${p.id}?key=${encodeURIComponent(key)}`, { method: "DELETE" });
+  if (!res.ok) { alert("削除に失敗しました"); return; }
+  map.closePopup();
+  await load();
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
 document.getElementById("search").addEventListener("input", renderList);
+document.getElementById("add").onclick = () => {
+  const c = map.getCenter();
+  openEditor({ x: Math.floor(c.lng), z: Math.floor(c.lat) });
+};
 document.getElementById("toggle").onclick = () =>
   setCollapsed(!document.getElementById("side").classList.contains("collapsed"));
 load();

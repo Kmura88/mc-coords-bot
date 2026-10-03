@@ -1,7 +1,11 @@
 // マイクラ座標共有: Discord スラッシュコマンド + 地図ページ用 API
 //
 //   POST /interactions  … Discord からのコマンド呼び出し
-//   GET  /api/points    … 地図ページが座標一覧を取得（?key=MAP_KEY が必要）
+//   GET    /api/points      … 地図ページが座標一覧を取得
+//   POST   /api/points      … 地図ページから座標を登録
+//   PATCH  /api/points/:id  … 地図ページから座標を修正
+//   DELETE /api/points/:id  … 地図ページから座標を削除
+//     （/api/* はすべて ?key=MAP_KEY が必要）
 //   それ以外            … public/ の静的ファイル（地図ページ・タイル）
 
 const DIMENSIONS = { overworld: "オーバーワールド", nether: "ネザー", end: "エンド" };
@@ -17,16 +21,106 @@ export default {
     if (url.pathname === "/interactions" && request.method === "POST") {
       return handleInteraction(request, env);
     }
-    if (url.pathname === "/api/points" && request.method === "GET") {
-      if (env.MAP_KEY && url.searchParams.get("key") !== env.MAP_KEY) {
-        return Response.json({ error: "invalid key" }, { status: 403 });
-      }
-      const { results } = await env.DB.prepare("SELECT * FROM points ORDER BY id").all();
-      return Response.json(results, { headers: { "Cache-Control": "no-store" } });
+    if (url.pathname.startsWith("/api/points")) {
+      return handleApi(request, env, url);
     }
     return env.ASSETS.fetch(request);
   },
 };
+
+// ---------------------------------------------------------------------------
+// 地図ページ用 API
+
+async function handleApi(request, env, url) {
+  const method = request.method;
+  // 書き込みは合言葉の設定を必須にする（未設定だと誰でも書き換えられてしまうため）
+  if ((env.MAP_KEY || method !== "GET") && url.searchParams.get("key") !== env.MAP_KEY) {
+    return Response.json({ error: "invalid key" }, { status: 403 });
+  }
+  const m = url.pathname.match(/^\/api\/points(?:\/(\d+))?$/);
+  if (!m) return Response.json({ error: "not found" }, { status: 404 });
+  const id = m[1] && Number(m[1]);
+
+  if (method === "GET" && !id) {
+    const { results } = await env.DB.prepare("SELECT * FROM points ORDER BY id").all();
+    return Response.json(results, { headers: { "Cache-Control": "no-store" } });
+  }
+
+  if (method === "POST" && !id) {
+    const input = validatePoint(await request.json().catch(() => null), true);
+    if (input.error) return Response.json(input, { status: 400 });
+    const p = await env.DB.prepare(
+      "INSERT INTO points (name, x, y, z, dimension, note, author) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *",
+    ).bind(input.name, input.x, input.y, input.z, input.dimension, input.note, input.author).first();
+    return Response.json(p, { status: 201 });
+  }
+
+  if (method === "PATCH" && id) {
+    const input = validatePoint(await request.json().catch(() => null), false);
+    if (input.error) return Response.json(input, { status: 400 });
+    delete input.author; // 登録者は変えない
+    const fields = Object.keys(input);
+    if (!fields.length) return Response.json({ error: "変更する項目がありません" }, { status: 400 });
+    const p = await env.DB.prepare(
+      `UPDATE points SET ${fields.map((k) => `${k} = ?`).join(", ")} WHERE id = ? RETURNING *`,
+    ).bind(...fields.map((k) => input[k]), id).first();
+    return p ? Response.json(p) : Response.json({ error: "not found" }, { status: 404 });
+  }
+
+  if (method === "DELETE" && id) {
+    const p = await env.DB.prepare("DELETE FROM points WHERE id = ? RETURNING *").bind(id).first();
+    return p ? Response.json(p) : Response.json({ error: "not found" }, { status: 404 });
+  }
+
+  return Response.json({ error: "method not allowed" }, { status: 405 });
+}
+
+// 入力チェック。required=false（修正）のときは渡された項目だけを返す。
+// y と note は null（空欄）にできる。
+const LABELS = { name: "名前", x: "X", y: "Y", z: "Z", note: "メモ", author: "あなたの名前" };
+
+function validatePoint(body, required) {
+  if (!body || typeof body !== "object") return { error: "入力が正しくありません" };
+  const out = {};
+  const text = (k, max, nullable) => {
+    if (!(k in body)) return required && !nullable ? `${LABELS[k]} は必須です` : null;
+    const v = body[k] === null ? "" : String(body[k]).trim();
+    if (!v) {
+      if (nullable) { out[k] = null; return null; }
+      return `${LABELS[k]} は必須です`;
+    }
+    if (v.length > max) return `${LABELS[k]} は ${max} 文字以内にしてください`;
+    out[k] = v;
+    return null;
+  };
+  const int = (k, min, max, nullable) => {
+    if (!(k in body)) return required && !nullable ? `${LABELS[k]} は必須です` : null;
+    if ((body[k] === null || body[k] === "") && nullable) { out[k] = null; return null; }
+    const v = Number(body[k]);
+    if (!Number.isInteger(v) || v < min || v > max) return `${LABELS[k]} は ${min}〜${max} の整数にしてください`;
+    out[k] = v;
+    return null;
+  };
+  const err =
+    text("name", 50, false) ||
+    int("x", -30000000, 30000000, false) ||
+    int("z", -30000000, 30000000, false) ||
+    int("y", -64, 320, true) ||
+    text("note", 200, true) ||
+    text("author", 32, false);
+  if (err) return { error: err };
+  if ("dimension" in body) {
+    if (!(body.dimension in DIMENSIONS)) return { error: "ディメンションが正しくありません" };
+    out.dimension = body.dimension;
+  } else if (required) {
+    out.dimension = "overworld";
+  }
+  if (required) {
+    out.y ??= null;
+    out.note ??= null;
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // Discord

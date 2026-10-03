@@ -5,7 +5,7 @@ Discord のスラッシュコマンドで座標を登録し、シード値から
 
 - **常時起動のサーバー不要** — Cloudflare Workers + D1 の無料枠だけで動作
 - **構造物は表示しない** — 地図はバイオームと起伏のみ。村・神殿・遺跡などは自分で探す前提
-- **Discord で登録、ブラウザで閲覧** — 地図ページは拡大縮小・検索・スマホ対応
+- **Discord でも Web でも登録できる** — 地図ページは拡大縮小・検索・スマホ対応
 
 ## 機能
 
@@ -26,8 +26,9 @@ Discord のスラッシュコマンドで座標を登録し、シード値から
 
 - シード値から事前生成した地形タイル（バイオーム色 + 陰影）を Leaflet で表示
 - 登録座標をピンとラベルで表示、サイドバーから検索・ジャンプ
-- 地図をクリックするとその地点の座標・ネザー換算・`/add` コマンドを表示
-- 座標データの取得には合言葉（`MAP_KEY`）が必要。`/map` が出すリンクに含まれる
+- 地図をクリックするとその地点の座標・ネザー換算を表示し、そのまま登録できる
+- 座標の追加・編集・削除（登録者名はブラウザに記憶）
+- 座標の閲覧・編集には合言葉（`MAP_KEY`）が必要。`/map` が出すリンクに含まれる。合言葉なしでは地形だけが見える
 
 地図はオーバーワールドのみ。ネザー・エンドの座標は一覧に表示されます。
 
@@ -39,7 +40,7 @@ maptools/                シード値 → 地図タイル生成（初回に一�
   gen_tiles.py             全体を描画して Leaflet 用タイル (WebP) に分割
   cubiomes/                https://github.com/Cubitect/cubiomes（MIT, 同梱）
 worker/                  Cloudflare Worker
-  src/index.js             Discord Interactions の処理と座標 API
+  src/index.js             Discord Interactions の処理と座標 API（GET/POST/PATCH/DELETE /api/points）
   public/index.html        地図ページ
   public/tiles/            生成されたタイル（git 管理外）
   schema.sql               D1 のテーブル定義
@@ -77,18 +78,18 @@ npx wrangler secret put DISCORD_PUBLIC_KEY
 npx wrangler secret put MAP_KEY
 
 # 3. Discord 開発者ポータルで Interactions Endpoint URL に
-#    https://<worker>.workers.dev/interactions を設定してから、コマンドを登録
+#    https://<worker>.workers.dev/interactions を設定し、
+#    applications.commands スコープの招待 URL でサーバーに追加してから、コマンドを登録
 DISCORD_APPLICATION_ID=... DISCORD_TOKEN=... DISCORD_GUILD_ID=... npm run register
 ```
 
-最後に `applications.commands` スコープの招待 URL でサーバーに追加します。
 
 ### 環境変数・シークレット
 
 | 名前 | 用途 | 設定場所 |
 |---|---|---|
 | `DISCORD_PUBLIC_KEY` | Discord からのリクエストの署名検証 | `wrangler secret put` |
-| `MAP_KEY` | 地図ページで座標を見るための合言葉（未設定なら誰でも閲覧可） | `wrangler secret put` |
+| `MAP_KEY` | 地図ページで座標を見る・編集するための合言葉（未設定だと閲覧は誰でも可、Web からの編集は不可） | `wrangler secret put` |
 | `DISCORD_APPLICATION_ID` / `DISCORD_TOKEN` / `DISCORD_GUILD_ID` | コマンド登録時のみ使用 | 実行時の環境変数 |
 
 ### ローカル開発
